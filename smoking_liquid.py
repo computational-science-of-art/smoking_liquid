@@ -33,10 +33,10 @@ class Timer():
 class SmokingRobot():
     u"""喫煙ロボット"""
     def __init__(self, port,
-            startAngle=[0.0, 1.0, 1.0],
+            startAngle=[0.0, 0.0, 0.0],
             endAngle=[1.0, 1.0, 1.0],
             cigarSetAngle=[0.0, 1.0, 1.0],
-            cigarUnsetAngle=[0.0, 0.0, 0.0],
+            cigarUnsetAngle=[1.0, 0.0, 0.0],
             t_breathe=2.0, t_wait=3.0, t_emit=2.0, t_set=1.5,
             header='H'):
         self.ser = serial.Serial(port, 115200, timeout=0.1)
@@ -49,7 +49,7 @@ class SmokingRobot():
         self.cigarUnsetAngle = cigarUnsetAngle
         self.setSmokeTime(t_breathe, t_wait, t_emit)
         self.t_set = t_set
-        self._move(self.cigarUnsetAngle)
+        self._move(self.nowAngle)
         print("Initializing ...")
         time.sleep(2)
         print("Hello! I'm a Smoking Robot.")
@@ -66,8 +66,8 @@ class SmokingRobot():
         self.setCigar(self.t_set)
         self.breathe(self.t_breathe)
         time.sleep(self.t_wait)
-        self.emit(self.t_emit)
         self.unsetCigar(self.t_set)
+        self.emit(self.t_emit)
         print("smoke end")
 
     def setCigar(self, t):
