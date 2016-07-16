@@ -20,7 +20,7 @@ class Timer():
 
 
 class SmokingRobot():
-    def __init__(self, port, startAngle=0.0, endAngle=1.0, t_breathe=1.0, t_wait=1.0, t_emit=1.0):
+    def __init__(self, port, startAngle=0.0, endAngle=1.0, t_breathe=2.0, t_wait=3.0, t_emit=2.0):
         self.ser = serial.Serial(port, 115200, timeout=0.1)
         self.nowAngle = startAngle
         self.startAngle = startAngle
