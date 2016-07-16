@@ -3,6 +3,13 @@
 import serial
 import time
 
+def makeSignal(header, data):
+    u"""headerはchar1文字,dataは0.0-1.0のfloat"""
+    buf = header
+    for val in data:
+        buf += chr(int(val * 255))
+    return buf
+
 class Timer():
     u"""動作時間カウントのためのタイマ"""
     def __init__(self, endtarget):
@@ -25,12 +32,26 @@ class Timer():
 
 class SmokingRobot():
     u"""喫煙ロボット"""
-    def __init__(self, port, startAngle=0.0, endAngle=1.0, t_breathe=2.0, t_wait=3.0, t_emit=2.0):
+    def __init__(self, port,
+            startAngle=[0.0, 1.0, 1.0],
+            endAngle=[1.0, 1.0, 1.0],
+            cigarSetAngle=[0.0, 1.0, 1.0],
+            cigarUnsetAngle=[0.0, 0.0, 0.0],
+            t_breathe=2.0, t_wait=3.0, t_emit=2.0, t_set=1.5,
+            header='H'):
         self.ser = serial.Serial(port, 115200, timeout=0.1)
+        # headerはシリアル通信の始まりを示す1文字
+        self.header = header
         self.nowAngle = startAngle
         self.startAngle = startAngle
         self.endAngle = endAngle
+        self.cigarSetAngle = cigarSetAngle
+        self.cigarUnsetAngle = cigarUnsetAngle
         self.setSmokeTime(t_breathe, t_wait, t_emit)
+        self.t_set = t_set
+        self._move(self.cigarUnsetAngle)
+        print("Initializing ...")
+        time.sleep(2)
         print("Hello! I'm a Smoking Robot.")
 
     def setSmokeTime(self, t_breathe, t_wait, t_emit):
@@ -42,10 +63,24 @@ class SmokingRobot():
     def smoke(self):
         u"""喫煙動作を実行する"""
         print("smoke start")
+        self.setCigar(self.t_set)
         self.breathe(self.t_breathe)
         time.sleep(self.t_wait)
         self.emit(self.t_emit)
+        self.unsetCigar(self.t_set)
         print("smoke end")
+
+    def setCigar(self, t):
+        u"""タバコを口元に持っていく動作"""
+        print("set the cigar")
+        self._moveLinear(self.cigarSetAngle, t)
+        print("set the cigar complete")
+
+    def unsetCigar(self, t):
+        u"""タバコを口元から離す動作"""
+        print("unset the cigar")
+        self._moveLinear(self.cigarUnsetAngle, t)
+        print("unset the cigar complete")
 
     def breathe(self, t):
         u"""吸う動作"""
@@ -60,19 +95,20 @@ class SmokingRobot():
         print("emit end")
 
     def _move(self, targetAngle):
-        self.ser.write(chr(int(targetAngle * 255)))
+        self.ser.write(makeSignal(self.header, targetAngle))
         self.nowAngle = targetAngle
-        print(int(targetAngle * 255))
-        time.sleep(0.05)
+        time.sleep(0.02)
+        print(self.nowAngle)
 
     def _moveLinear(self, targetAngle, targetTime):
         startAngle = self.nowAngle
         timer = Timer(targetTime)
-        func = lambda t: (startAngle + t / targetTime * (targetAngle - startAngle))
+        func = lambda t, sa, ta: (sa + t / targetTime * (ta - sa))
         print("linear motor control start")
         timer.start()
         while (not timer.endJudge()):
-            self._move(func(timer.interval()))
+            self._move(map(func, [timer.interval()] * len(startAngle),
+                startAngle, targetAngle))
         print("linear motor control end")
 
 if __name__ == '__main__':
