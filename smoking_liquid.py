@@ -69,12 +69,12 @@ class SmokingRobot():
 if __name__ == '__main__':
     r = SmokingRobot('/dev/ttyACM0')
     while True:
-        value = raw_input("input s to smoke >>> ")
+        value = raw_input("input s to smoke, input q to quit >>> ")
         if (value == "s"):
             r.smoke()
         elif (value == "q"):
             print("終了します")
             break
         else:
-            print("error: 入力が数字ではありません")
+            print("error: 入力が適切ではありません")
 
