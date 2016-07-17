@@ -3,6 +3,8 @@
 import serial
 import time
 
+delay = 1.0
+
 def convVal(m):
     return int(255.0 * m)
 
@@ -13,25 +15,17 @@ if __name__ == '__main__':
     ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
     print("move")
     time.sleep(1)
-    for i in range(5):
-        sig = makeSignal(0.0, 0.0, 0.0, 0.0)
+    for i in range(2):
+        sig = makeSignal(0.2, 0.2, 0.2, 0.2)
+        print(sig)
         ser.write(sig)
-        time.sleep(0.4)
+        time.sleep(delay)
         res = ser.read(5)
         print(res)
-        sig = makeSignal(1.0, 1.0, 1.0, 1.0)
+        sig = makeSignal(0.8, 0.8, 0.6, 0.6)
+        print(sig)
         ser.write(sig)
-        time.sleep(0.4)
-        res = ser.read(5)
-        print(res)
-        sig = makeSignal(0.0, 1.0, 0.0, 1.0)
-        ser.write(sig)
-        time.sleep(0.4)
-        res = ser.read(5)
-        print(res)
-        sig = makeSignal(1.0, 0.0, 1.0, 0.0)
-        ser.write(sig)
-        time.sleep(0.4)
+        time.sleep(delay)
         res = ser.read(5)
         print(res)
 
