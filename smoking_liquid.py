@@ -2,13 +2,24 @@
 
 import serial
 import time
+import numpy as np
+from math import sin, cos, pi
+
 
 def makeSignal(header, data):
     u"""headerはchar1文字,dataは0.0-1.0のfloat"""
     buf = header
     for val in data:
+        if (val > 1.0 or val < 0.0):
+            val = max(min(val, 1.0), 0.0)
+            print("targetAngle is invalid!")
         buf += chr(int(val * 255))
     return buf
+
+def linearInterpolation(t, targetTime, initialValue, targetValue):
+    u"""線形補間"""
+    return initialValue + t / targetTime * (targetValue - initialValue)
+
 
 class Timer():
     u"""動作時間カウントのためのタイマ"""
@@ -33,25 +44,24 @@ class Timer():
 class SmokingRobot():
     u"""喫煙ロボット"""
     def __init__(self, port,
-            startAngle=[0.0, 0.0, 0.0],
-            endAngle=[1.0, 1.0, 1.0],
-            cigarSetAngle=[0.0, 1.0, 1.0],
-            cigarUnsetAngle=[1.0, 0.0, 0.0],
+            initialState=np.array([0.0, 0.0, 0.0, 0.0]),
             t_breathe=1.0, t_wait=1.0, t_emit=1.0, t_set=1.5,
+            handlink=np.array([59, 51, 59]),
+            handDistance=np.array([50.0, 0.0, 0.0]),
             header='H'):
         self.ser = serial.Serial(port, 115200, timeout=0.1)
         # headerはシリアル通信の始まりを示す1文字
         self.header = header
-        self.nowAngle = startAngle
-        self.startAngle = startAngle
-        self.endAngle = endAngle
-        self.cigarSetAngle = cigarSetAngle
-        self.cigarUnsetAngle = cigarUnsetAngle
+        self.nowAngle = initialState
+        self.cigarSetState = False
+        self.breatheState = False
         self.setSmokeTime(t_breathe, t_wait, t_emit)
         self.t_set = t_set
+        self.hand = Hand(handlink, self.nowAngle * pi)
+        self.handDistance = handDistance
         self._move(self.nowAngle)
         print("Initializing ...")
-        time.sleep(2)
+        time.sleep(1)
         print("Hello! I'm a Smoking Robot.")
 
     def setSmokeTime(self, t_breathe, t_wait, t_emit):
@@ -60,47 +70,75 @@ class SmokingRobot():
         self.t_wait = t_wait
         self.t_emit = t_emit
 
-    def smoke(self):
-        u"""喫煙動作を実行する"""
-        print("smoke start")
-        self.setCigar(self.t_set)
-        self.breathe(self.t_breathe)
-        time.sleep(self.t_wait)
-        self.unsetCigar(self.t_set)
-        self.emit(self.t_emit)
-        print("smoke end")
-
-    def setCigar(self, t):
-        u"""タバコを口元に持っていく動作"""
-        print("set the cigar")
-        self._moveLinear(self.cigarSetAngle, t)
-        print("set the cigar complete")
-
-    def unsetCigar(self, t):
-        u"""タバコを口元から離す動作"""
-        print("unset the cigar")
-        self._moveLinear(self.cigarUnsetAngle, t)
-        print("unset the cigar complete")
-
-    def breathe(self, t):
-        u"""吸う動作"""
-        print("breathe start")
-        self._moveLinear(self.endAngle, t)
-        print("breathe end")
-
-    def emit(self, t):
-        u"""吐く動作"""
-        print("emit start")
-        self._moveLinear(self.startAngle, t)
-        print("emit end")
-
-    def _move(self, targetAngle):
+    def _move(self, targetAngle, t=0.02):
+        u"""全サーボを関節を動かす"""
         self.ser.write(makeSignal(self.header, targetAngle))
         self.nowAngle = targetAngle
-        time.sleep(0.02)
+        time.sleep(t)
         print(self.nowAngle)
 
+    def _moveOneServo(self, i, targetAngle):
+        u"""一つのサーボのみを動かす"""
+        targetAngleVector = self.nowAngle
+        targetAngleVector[i] = targetAngle
+        self._move(targetAngleVector)
+
+    def smoke(self):
+        u"""喫煙動作を実行する"""
+        self.cigarSetState = False
+        self.breatheState = False
+        print("smoke start")
+        self.setCigar(self.t_set)
+        self._moveBreathe(self.t_breathe)
+        time.sleep(self.t_wait)
+        self.setCigar(self.t_set)
+        self._moveBreathe(self.t_emit)
+        print("smoke end")
+
+    def _moveBreathe(self, t):
+        u"""状態に応じて吸ったり吐いたりする"""
+        if (self.breatheState):
+            # 吐く
+            startAngle = 1.0
+            targetAngle = 0.0
+        else:
+            # 吸う
+            startAngle = 0.0
+            targetAngle = 1.0
+        timer = Timer(t)
+        timer.start()
+        while (not timer.endJudge()):
+            self._moveOneServo(0,
+                    linearInterpolation(timer.interval(), t, startAngle, targetAngle))
+        self.breatheState = not self.breatheState
+
+    def setCigar(self, t):
+        u"""状態に応じてタバコを口元に持っていく/口元から離す"""
+        if (self.cigarSetState):
+            # 離す
+            print("unset the cigar")
+            dx = -self.handDistance
+        else:
+            # 近づける
+            print("set the cigar")
+            dx = self.handDistance
+        self._moveHand(dx, t)
+        self.cigarSetState = not self.cigarSetState
+        print("cigar positioning complete")
+
+    def _moveHand(self, dx, t):
+        u"""手を動かす"""
+        step = 100
+        delay = float(t) / step
+        xStep = dx / step
+        for i in range(step):
+            # targetAngleは0.0-1.0で指定なのでpiで割る
+            targetAngle = list(self.hand.ikStep(xStep) / pi)
+            targetAngleVector = np.r_[np.array([self.nowAngle[0]]), targetAngle]
+            self._move(targetAngleVector, delay)
+
     def _moveLinear(self, targetAngle, targetTime):
+        u"""線形補間しながら全関節を動かす"""
         startAngle = self.nowAngle
         timer = Timer(targetTime)
         func = lambda t, sa, ta: (sa + t / targetTime * (ta - sa))
@@ -111,6 +149,31 @@ class SmokingRobot():
                 startAngle, targetAngle))
         print("linear motor control end")
 
+
+class Hand():
+    def __init__(self, link, initialAngle):
+        self.link = link
+        self.joint = initialAngle[1:4]
+        print("handAngle = " + str(self.joint))
+
+    def jacobi(self, s):
+        l = self.link
+        jacobi = np.array([
+            [- l[0] * sin(s[0] - np.deg2rad(10)) - l[1] * sin(s[0] + s[1] - np.deg2rad(10)) - l[2] * sin(s[0] + s[1] + s[2] + np.deg2rad(10)),
+             - l[1] + sin(s[0] + s[1] - np.deg2rad(10)) - l[2] * sin(s[0] + s[1] + s[2] + np.deg2rad(10)),
+             - l[2] * sin(s[0] + s[1] + s[2] + np.deg2rad(10))],
+            [l[0] * cos(s[0] - np.deg2rad(10)) + l[1] * cos(s[0] + s[1] - np.deg2rad(10)) + l[2] * cos(s[0] + s[1] + s[2] + np.deg2rad(10)),
+             l[1] + cos(s[0] + s[1] - np.deg2rad(10)) + l[2] * cos(s[0] + s[1] + s[2] + np.deg2rad(10)),
+             l[2] * cos(s[0] + s[1] + s[2] + np.deg2rad(10))],
+            [1, 1, 1]])
+        return jacobi
+
+    def ikStep(self, dp):
+        j = self.jacobi(self.joint)
+        self.joint = self.joint + np.dot(np.linalg.inv(j), dp)
+        return self.joint
+
+
 if __name__ == '__main__':
     r = SmokingRobot('/dev/ttyACM0')
     while True:
@@ -120,6 +183,10 @@ if __name__ == '__main__':
         elif (value == "q"):
             print("終了します")
             break
+        elif (value == "b"):
+            r._moveBreathe(r.t_set)
+        elif (value == "h"):
+            r.setCigar(1.0)
         else:
             print("error: 入力が適切ではありません")
 
