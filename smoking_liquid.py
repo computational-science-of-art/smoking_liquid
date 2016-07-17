@@ -12,7 +12,7 @@ def makeSignal(header, data):
     for val in data:
         if (val > 1.0 or val < 0.0):
             val = max(min(val, 1.0), 0.0)
-            print("targetAngle is invalid!")
+            print("invalid targetAngle")
         buf += chr(int(val * 255))
     return buf
 
@@ -44,21 +44,27 @@ class Timer():
 class SmokingRobot():
     u"""喫煙ロボット"""
     def __init__(self, port,
-            initialState=np.array([0.0, 0.0, 0.0, 0.0]),
+            initialState=np.array([0.0, 0.0, 0.1, 0.22]),
+            endState=np.array([0.0, 0.0, 0.3, 0.42]),
             t_breathe=1.0, t_wait=1.0, t_emit=1.0, t_set=1.5,
             handlink=np.array([59, 51, 59]),
-            handDistance=np.array([50.0, 0.0, 0.0]),
+            handDistance=np.array([20.0, 0.0, 0.0]),
+            servoRotation=[True, True, False, True],
             header='H'):
+        # [0 0 0.18 0]
         self.ser = serial.Serial(port, 115200, timeout=0.1)
         # headerはシリアル通信の始まりを示す1文字
         self.header = header
         self.nowAngle = initialState
+        self.initialState = initialState
+        self.endState = endState
         self.cigarSetState = False
         self.breatheState = False
         self.setSmokeTime(t_breathe, t_wait, t_emit)
         self.t_set = t_set
         self.hand = Hand(handlink, self.nowAngle * pi)
         self.handDistance = handDistance
+        self.servoRotation = servoRotation
         self._move(self.nowAngle)
         print("Initializing ...")
         time.sleep(1)
@@ -71,11 +77,21 @@ class SmokingRobot():
         self.t_emit = t_emit
 
     def _move(self, targetAngle, t=0.02):
-        u"""全サーボを関節を動かす"""
-        self.ser.write(makeSignal(self.header, targetAngle))
+        u"""全関節を動かす"""
+        #convertedTarget = self.convertServoRotation(targetAngle)
+        convertedTarget = targetAngle
+        self.ser.write(makeSignal(self.header, convertedTarget))
         self.nowAngle = targetAngle
         time.sleep(t)
         print(self.nowAngle)
+
+    def convertServoRotation(self, targetAngle):
+        u"""サーボの回転方向を設定"""
+        result = targetAngle
+        for (i, val) in enumerate(self.servoRotation):
+            if (not val):
+                result[i] = 1.0 - targetAngle[i]
+        return result
 
     def _moveOneServo(self, i, targetAngle):
         u"""一つのサーボのみを動かす"""
@@ -118,11 +134,15 @@ class SmokingRobot():
             # 離す
             print("unset the cigar")
             dx = -self.handDistance
+            targetAngle = self.initialState
         else:
             # 近づける
             print("set the cigar")
             dx = self.handDistance
-        self._moveHand(dx, t)
+            targetAngle = self.endState
+        targetAngle[0] = self.nowAngle[0]
+        self._moveLinear(targetAngle, self.t_set)
+        #self._moveHand(dx, t)
         self.cigarSetState = not self.cigarSetState
         print("cigar positioning complete")
 
