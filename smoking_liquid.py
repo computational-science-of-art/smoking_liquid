@@ -34,10 +34,10 @@ class SmokingRobot():
     u"""喫煙ロボット"""
     def __init__(self, port,
             startAngle=[0.0, 0.0, 0.0],
-            endAngle=[0.7, 1.0, 1.0],
+            endAngle=[1.0, 1.0, 1.0],
             cigarSetAngle=[0.0, 1.0, 1.0],
-            cigarUnsetAngle=[0.7, 0.0, 0.0],
-            t_breathe=2.0, t_wait=3.0, t_emit=2.0, t_set=1.5,
+            cigarUnsetAngle=[1.0, 0.0, 0.0],
+            t_breathe=1.0, t_wait=1.0, t_emit=1.0, t_set=1.5,
             header='H'):
         self.ser = serial.Serial(port, 115200, timeout=0.1)
         # headerはシリアル通信の始まりを示す1文字
