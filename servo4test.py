@@ -15,19 +15,14 @@ if __name__ == '__main__':
     ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
     print("move")
     time.sleep(1)
-    for i in range(2):
-        sig = makeSignal(0.2, 0.2, 0.2, 0.2)
-        print(sig)
+    while True:
+        value = raw_input("motor value 0-255 >>> ")
+        vals = map(float, value.split(" "))
+        print(vals)
+        if (not len(vals) == 4):
+            print("vals length error")
+            continue
+        sig = makeSignal(vals[0], vals[1], vals[2], vals[3])
         ser.write(sig)
-        time.sleep(delay)
-        res = ser.read(5)
-        print(res)
-        sig = makeSignal(0.8, 0.8, 0.6, 0.6)
-        print(sig)
-        ser.write(sig)
-        time.sleep(delay)
-        res = ser.read(5)
-        print(res)
-
     ser.close()
 
